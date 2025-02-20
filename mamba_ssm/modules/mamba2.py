@@ -31,6 +31,8 @@ from mamba_ssm.distributed.distributed_utils import all_reduce, reduce_scatter
 from mamba_ssm.ops.triton.ssd_combined import mamba_chunk_scan_combined
 from mamba_ssm.ops.triton.ssd_combined import mamba_split_conv1d_scan_combined
 
+print("IMPORTING CUSTOM LAYER SCALING FORK")
+
 
 class Mamba2(nn.Module):
     def __init__(
