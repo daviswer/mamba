@@ -183,14 +183,14 @@ class Mamba2(nn.Module):
         if self.scale_factor > 1:
             s = zxbcdt.size()
             zxbcdt = zxbcdt.view(-1, s[-1])
-            x = zxbcdt[:,-self.headdim:] + self.dt_bias
+            x = zxbcdt[:,-self.nheads:] + self.dt_bias
             a = self.scale_factor
             sp = torch.nn.functional.softplus
             dt = sp(x).log()
             dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
             dt = x/a - sp(dt)*(1-1/a)
             dt = dt.view(s[:-1], -1)
-            zxbcdt[:,-self.headdim:] = dt - self.dt_bias
+            zxbcdt[:,-self.nheads:] = dt - self.dt_bias
             zxbcdt = zxbcdt.view(*s)
 
         if seqlen_og is not None:
@@ -301,14 +301,14 @@ class Mamba2(nn.Module):
         if self.scale_factor > 1:
             s = zxbcdt.size()
             zxbcdt = zxbcdt.view(-1, s[-1])
-            x = zxbcdt[:,-self.headdim:] + self.dt_bias
+            x = zxbcdt[:,-self.nheads:] + self.dt_bias
             a = self.scale_factor
             sp = torch.nn.functional.softplus
             dt = sp(x).log()
             dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
             dt = x/a - sp(dt)*(1-1/a)
             dt = dt.view(s[:-1], -1)
-            zxbcdt[:,-self.headdim:] = dt - self.dt_bias
+            zxbcdt[:,-self.nheads:] = dt - self.dt_bias
             zxbcdt = zxbcdt.view(*s)
         
         d_mlp = (zxbcdt.shape[-1] - 2 * self.d_ssm - 2 * self.ngroups * self.d_state - self.nheads) // 2
