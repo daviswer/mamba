@@ -93,6 +93,7 @@ class Mamba2(nn.Module):
         self.use_mem_eff_path = use_mem_eff_path
         self.layer_idx = layer_idx
         self.scale_factor = scale_factor
+        self.verbosed = False
 
         # Order: [z, x, B, C, dt]
         d_in_proj = 2 * self.d_inner + 2 * self.ngroups * self.d_state + self.nheads
@@ -192,6 +193,9 @@ class Mamba2(nn.Module):
             dt = dt.view(*s[:-1], -1)
             zxbcdt[:,-self.nheads:] = dt - self.dt_bias
             zxbcdt = zxbcdt.view(*s)
+            if self.verbosed == False:
+                print("Stretching mamba")
+                self.verbosed = True
 
         if seqlen_og is not None:
             zxbcdt = rearrange(zxbcdt, "(b l) d -> b l d", l=seqlen)
