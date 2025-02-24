@@ -180,16 +180,17 @@ class Mamba2(nn.Module):
 
         zxbcdt = self.in_proj(u)  # (B, L, d_in_proj) or (B * L, d_in_proj)
 
-        # dt scaling per approx of Haochen's fn
+        # dt scaling per Haochen's fn
         if self.scale_factor > 1:
             s = zxbcdt.size()
             zxbcdt = zxbcdt.view(-1, s[-1])
             x = zxbcdt[:,-self.nheads:] + self.dt_bias
             a = self.scale_factor
             sp = torch.nn.functional.softplus
-            dt = sp(x).log()
-            dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
-            dt = x/a - sp(dt)*(1-1/a)
+            dt = (1+x.exp()).pow(1/a).sub(1).log()
+            # dt = sp(x).log()
+            # dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
+            # dt = x/a - sp(dt)*(1-1/a)
             dt = dt.view(*s[:-1], -1)
             zxbcdt[:,-self.nheads:] = dt - self.dt_bias
             zxbcdt = zxbcdt.view(*s)
@@ -301,16 +302,17 @@ class Mamba2(nn.Module):
         assert hidden_states.shape[1] == 1, "Only support decoding with 1 token at a time for now"
         zxbcdt = self.in_proj(hidden_states.squeeze(1))  # (B 2D)
 
-        # dt scaling per approx of Haochen's fn
+        # dt scaling per Haochen's fn
         if self.scale_factor > 1:
             s = zxbcdt.size()
             zxbcdt = zxbcdt.view(-1, s[-1])
             x = zxbcdt[:,-self.nheads:] + self.dt_bias
             a = self.scale_factor
             sp = torch.nn.functional.softplus
-            dt = sp(x).log()
-            dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
-            dt = x/a - sp(dt)*(1-1/a)
+            dt = (1+x.exp()).pow(1/a).sub(1).log()
+            # dt = sp(x).log()
+            # dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
+            # dt = x/a - sp(dt)*(1-1/a)
             dt = dt.view(*s[:-1], -1)
             zxbcdt[:,-self.nheads:] = dt - self.dt_bias
             zxbcdt = zxbcdt.view(*s)
