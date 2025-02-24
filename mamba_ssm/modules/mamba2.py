@@ -61,6 +61,7 @@ class Mamba2(nn.Module):
         sequence_parallel=True,
         device=None,
         dtype=None,
+        scale_factor=None,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
