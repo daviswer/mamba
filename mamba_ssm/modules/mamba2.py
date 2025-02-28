@@ -188,7 +188,7 @@ class Mamba2(nn.Module):
             sp = torch.nn.functional.softplus
             a = 1 + (self.scale_factor - 1) * sp(x).mul(torch.exp(self.A_log.float()).neg()).exp()
             dt = sp(x).log()
-            dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
+            dt = a*a.log()/(a-1) - x/a - (1-1/a)*dt
             dt = x/a - sp(dt)*(1-1/a)
             dt = dt.view(*s[:-1], -1)
             zxbcdt[:,-self.nheads:] = dt - self.dt_bias
@@ -309,7 +309,7 @@ class Mamba2(nn.Module):
             sp = torch.nn.functional.softplus
             a = 1 + (self.scale_factor - 1) * sp(x).mul(torch.exp(self.A_log.float()).neg()).exp()
             dt = sp(x).log()
-            dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
+            dt = a*a.log()/(a-1) - x/a - (1-1/a)*dt
             dt = x/a - sp(dt)*(1-1/a)
             dt = dt.view(*s[:-1], -1)
             zxbcdt[:,-self.nheads:] = dt - self.dt_bias
