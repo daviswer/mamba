@@ -186,7 +186,7 @@ class Mamba2(nn.Module):
             zxbcdt = zxbcdt.view(-1, s[-1])
             x = zxbcdt[:,-self.nheads:] + self.dt_bias
             sp = torch.nn.functional.softplus
-            a = 1 + (self.scale_factor - 1) * sp(x).mul(torch.exp(self.A_log.float()).net()).exp()
+            a = 1 + (self.scale_factor - 1) * sp(x).mul(torch.exp(self.A_log.float()).neg()).exp()
             dt = sp(x).log()
             dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
             dt = x/a - sp(dt)*(1-1/a)
@@ -307,7 +307,7 @@ class Mamba2(nn.Module):
             zxbcdt = zxbcdt.view(-1, s[-1])
             x = zxbcdt[:,-self.nheads:] + self.dt_bias
             sp = torch.nn.functional.softplus
-            a = 1 + (self.scale_factor - 1) * sp(x).mul(torch.exp(self.A_log.float()).net()).exp()
+            a = 1 + (self.scale_factor - 1) * sp(x).mul(torch.exp(self.A_log.float()).neg()).exp()
             dt = sp(x).log()
             dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
             dt = x/a - sp(dt)*(1-1/a)
