@@ -207,7 +207,7 @@ class Mamba2(nn.Module):
             cb = torch.cat([
                 self.conv1d.bias[:self.d_ssm],
                 self.conv1d.bias[self.d_ssm:self.d_ssm+self.d_state]/self.scale_factor,
-                self.conv1d.bias[self.d_ssm+self.d_state]
+                self.conv1d.bias[self.d_ssm+self.d_state:]
             ])
             out = mamba_split_conv1d_scan_combined(
                 zxbcdt,
