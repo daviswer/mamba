@@ -204,8 +204,11 @@ class Mamba2(nn.Module):
         dt_limit_kwargs = {} if self.dt_limit == (0.0, float("inf")) else dict(dt_limit=self.dt_limit)
         if self.use_mem_eff_path and inference_params is None:
             zxbcdt[..., 2*self.d_inner:2*self.d_inner+self.d_state] = zxbcdt[..., 2*self.d_inner:2*self.d_inner+self.d_state]/self.scale_factor
-            cb = self.conv1d.bias
-            cb[self.d_ssm:self.d_ssm*self.d_state] = cb[self.d_ssm:self.d_ssm*self.d_state]/self.scale_factor
+            cb = torch.cat([
+                self.conv1d.bias[:self.d_ssm],
+                self.conv1d.bias[self.d_ssm:self.d_ssm+self.d_state]/self.scale_factor,
+                self.conv1d.bias[self.d_ssm+self.d_state]
+            ])
             out = mamba_split_conv1d_scan_combined(
                 zxbcdt,
                 rearrange(self.conv1d.weight, "d 1 w -> d w"),
