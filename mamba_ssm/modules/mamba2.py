@@ -180,22 +180,22 @@ class Mamba2(nn.Module):
 
         zxbcdt = self.in_proj(u)  # (B, L, d_in_proj) or (B * L, d_in_proj)
 
-        # dt scaling per approx of Haochen's fn
-        if self.scale_factor > 1:
-            s = zxbcdt.size()
-            zxbcdt = zxbcdt.view(-1, s[-1])
-            x = zxbcdt[:,-self.nheads:] + self.dt_bias
-            a = self.scale_factor
-            sp = torch.nn.functional.softplus
-            dt = sp(x).log()
-            dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
-            dt = x/a - sp(dt)*(1-1/a)
-            dt = dt.view(*s[:-1], -1)
-            zxbcdt[:,-self.nheads:] = dt - self.dt_bias
-            zxbcdt = zxbcdt.view(*s)
-            if self.verbosed == False:
-                print("Stretching mamba")
-                self.verbosed = True
+        # # dt scaling per approx of Haochen's fn
+        # if self.scale_factor > 1:
+        #     s = zxbcdt.size()
+        #     zxbcdt = zxbcdt.view(-1, s[-1])
+        #     x = zxbcdt[:,-self.nheads:] + self.dt_bias
+        #     a = self.scale_factor
+        #     sp = torch.nn.functional.softplus
+        #     dt = sp(x).log()
+        #     dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
+        #     dt = x/a - sp(dt)*(1-1/a)
+        #     dt = dt.view(*s[:-1], -1)
+        #     zxbcdt[:,-self.nheads:] = dt - self.dt_bias
+        #     zxbcdt = zxbcdt.view(*s)
+        #     if self.verbosed == False:
+        #         print("Stretching mamba")
+        #         self.verbosed = True
 
         if seqlen_og is not None:
             zxbcdt = rearrange(zxbcdt, "(b l) d -> b l d", l=seqlen)
@@ -203,12 +203,15 @@ class Mamba2(nn.Module):
         A = -torch.exp(self.A_log.float())  # (nheads) or (d_inner, d_state)
         dt_limit_kwargs = {} if self.dt_limit == (0.0, float("inf")) else dict(dt_limit=self.dt_limit)
         if self.use_mem_eff_path and inference_params is None:
+            zxbcdt[..., 2*self.d_inner:2*self.d_inner+self.d_state] = zxbcdt[..., 2*self.d_inner:2*self.d_inner+self.d_state]/self.scale_factor
+            cb = self.conv1d.bias
+            cb[self.d_ssm:self.d_ssm*self.d_state] = cb[self.d_ssm:self.d_ssm*self.d_state]/self.scale_factor
             out = mamba_split_conv1d_scan_combined(
                 zxbcdt,
                 rearrange(self.conv1d.weight, "d 1 w -> d w"),
-                self.conv1d.bias,
+                cb,
                 self.dt_bias,
-                A,
+                A/self.scale_factor,
                 D=rearrange(self.D, "(h p) -> h p", p=self.headdim) if self.D_has_hdim else self.D,
                 chunk_size=self.chunk_size,
                 seq_idx=seq_idx,
@@ -265,8 +268,8 @@ class Mamba2(nn.Module):
             y = mamba_chunk_scan_combined(
                 rearrange(x, "b l (h p) -> b l h p", p=self.headdim),
                 dt,
-                A,
-                rearrange(B, "b l (g n) -> b l g n", g=self.ngroups),
+                A/self.scale_factor,
+                rearrange(B, "b l (g n) -> b l g n", g=self.ngroups)/self.scale_factor,
                 rearrange(C, "b l (g n) -> b l g n", g=self.ngroups),
                 chunk_size=self.chunk_size,
                 D=rearrange(self.D, "(h p) -> h p", p=self.headdim) if self.D_has_hdim else self.D,
@@ -301,19 +304,19 @@ class Mamba2(nn.Module):
         assert hidden_states.shape[1] == 1, "Only support decoding with 1 token at a time for now"
         zxbcdt = self.in_proj(hidden_states.squeeze(1))  # (B 2D)
 
-        # dt scaling per approx of Haochen's fn
-        if self.scale_factor > 1:
-            s = zxbcdt.size()
-            zxbcdt = zxbcdt.view(-1, s[-1])
-            x = zxbcdt[:,-self.nheads:] + self.dt_bias
-            a = self.scale_factor
-            sp = torch.nn.functional.softplus
-            dt = sp(x).log()
-            dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
-            dt = x/a - sp(dt)*(1-1/a)
-            dt = dt.view(*s[:-1], -1)
-            zxbcdt[:,-self.nheads:] = dt - self.dt_bias
-            zxbcdt = zxbcdt.view(*s)
+        # # dt scaling per approx of Haochen's fn
+        # if self.scale_factor > 1:
+        #     s = zxbcdt.size()
+        #     zxbcdt = zxbcdt.view(-1, s[-1])
+        #     x = zxbcdt[:,-self.nheads:] + self.dt_bias
+        #     a = self.scale_factor
+        #     sp = torch.nn.functional.softplus
+        #     dt = sp(x).log()
+        #     dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
+        #     dt = x/a - sp(dt)*(1-1/a)
+        #     dt = dt.view(*s[:-1], -1)
+        #     zxbcdt[:,-self.nheads:] = dt - self.dt_bias
+        #     zxbcdt = zxbcdt.view(*s)
         
         d_mlp = (zxbcdt.shape[-1] - 2 * self.d_ssm - 2 * self.ngroups * self.d_state - self.nheads) // 2
         z0, x0, z, xBC, dt = torch.split(
@@ -341,6 +344,8 @@ class Mamba2(nn.Module):
 
         x, B, C = torch.split(xBC, [self.d_ssm, self.ngroups * self.d_state, self.ngroups * self.d_state], dim=-1)
         A = -torch.exp(self.A_log.float())  # (nheads,)
+        A = A/self.scale_factor
+        B = B/self.scale_factor
 
         # SSM step
         if selective_state_update is None:
