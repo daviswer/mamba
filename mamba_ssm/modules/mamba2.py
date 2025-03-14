@@ -63,7 +63,7 @@ class Mamba2(nn.Module, PyTorchModelHubMixin):
         sequence_parallel=True,
         device=None,
         dtype=None,
-        scale_factor=None,
+        scale_factor=1,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -92,6 +92,8 @@ class Mamba2(nn.Module, PyTorchModelHubMixin):
         self.chunk_size = chunk_size
         self.use_mem_eff_path = use_mem_eff_path
         self.layer_idx = layer_idx
+        self.scale_factor = scale_factor
+        self.verbosed = False
 
         # Order: [z, x, B, C, dt]
         d_in_proj = 2 * self.d_inner + 2 * self.ngroups * self.d_state + self.nheads
@@ -177,6 +179,24 @@ class Mamba2(nn.Module, PyTorchModelHubMixin):
                 return out
 
         zxbcdt = self.in_proj(u)  # (B, L, d_in_proj) or (B * L, d_in_proj)
+
+        # # dt scaling per approx of Haochen's fn
+        # if self.scale_factor > 1:
+        #     s = zxbcdt.size()
+        #     zxbcdt = zxbcdt.view(-1, s[-1])
+        #     x = zxbcdt[:,-self.nheads:] + self.dt_bias
+        #     a = self.scale_factor
+        #     sp = torch.nn.functional.softplus
+        #     dt = sp(x).log()
+        #     dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
+        #     dt = x/a - sp(dt)*(1-1/a)
+        #     dt = dt.view(*s[:-1], -1)
+        #     zxbcdt[:,-self.nheads:] = dt - self.dt_bias
+        #     zxbcdt = zxbcdt.view(*s)
+        #     if self.verbosed == False:
+        #         print("Stretching mamba")
+        #         self.verbosed = True
+
         if seqlen_og is not None:
             zxbcdt = rearrange(zxbcdt, "(b l) d -> b l d", l=seqlen)
         # If the model is loaded in fp16, without the .float() here, A might be -inf
@@ -280,6 +300,21 @@ class Mamba2(nn.Module, PyTorchModelHubMixin):
         dtype = hidden_states.dtype
         assert hidden_states.shape[1] == 1, "Only support decoding with 1 token at a time for now"
         zxbcdt = self.in_proj(hidden_states.squeeze(1))  # (B 2D)
+
+        # # dt scaling per approx of Haochen's fn
+        # if self.scale_factor > 1:
+        #     s = zxbcdt.size()
+        #     zxbcdt = zxbcdt.view(-1, s[-1])
+        #     x = zxbcdt[:,-self.nheads:] + self.dt_bias
+        #     a = self.scale_factor
+        #     sp = torch.nn.functional.softplus
+        #     dt = sp(x).log()
+        #     dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
+        #     dt = x/a - sp(dt)*(1-1/a)
+        #     dt = dt.view(*s[:-1], -1)
+        #     zxbcdt[:,-self.nheads:] = dt - self.dt_bias
+        #     zxbcdt = zxbcdt.view(*s)
+        
         d_mlp = (zxbcdt.shape[-1] - 2 * self.d_ssm - 2 * self.ngroups * self.d_state - self.nheads) // 2
         z0, x0, z, xBC, dt = torch.split(
             zxbcdt,
