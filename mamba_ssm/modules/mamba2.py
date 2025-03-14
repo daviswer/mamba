@@ -180,22 +180,22 @@ class Mamba2(nn.Module):
 
         zxbcdt = self.in_proj(u)  # (B, L, d_in_proj) or (B * L, d_in_proj)
 
-        # dt scaling per approx of Haochen's fn
-        if self.scale_factor > 1:
-            s = zxbcdt.size()
-            zxbcdt = zxbcdt.view(-1, s[-1])
-            x = zxbcdt[:,-self.nheads:] + self.dt_bias
-            a = self.scale_factor
-            sp = torch.nn.functional.softplus
-            dt = sp(x).log()
-            dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
-            dt = x/a - sp(dt)*(1-1/a)
-            dt = dt.view(*s[:-1], -1)
-            zxbcdt[:,-self.nheads:] = dt - self.dt_bias
-            zxbcdt = zxbcdt.view(*s)
-            if self.verbosed == False:
-                print("Stretching mamba")
-                self.verbosed = True
+        # # dt scaling per approx of Haochen's fn
+        # if self.scale_factor > 1:
+        #     s = zxbcdt.size()
+        #     zxbcdt = zxbcdt.view(-1, s[-1])
+        #     x = zxbcdt[:,-self.nheads:] + self.dt_bias
+        #     a = self.scale_factor
+        #     sp = torch.nn.functional.softplus
+        #     dt = sp(x).log()
+        #     dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
+        #     dt = x/a - sp(dt)*(1-1/a)
+        #     dt = dt.view(*s[:-1], -1)
+        #     zxbcdt[:,-self.nheads:] = dt - self.dt_bias
+        #     zxbcdt = zxbcdt.view(*s)
+        #     if self.verbosed == False:
+        #         print("Stretching mamba")
+        #         self.verbosed = True
 
         if seqlen_og is not None:
             zxbcdt = rearrange(zxbcdt, "(b l) d -> b l d", l=seqlen)
@@ -301,19 +301,19 @@ class Mamba2(nn.Module):
         assert hidden_states.shape[1] == 1, "Only support decoding with 1 token at a time for now"
         zxbcdt = self.in_proj(hidden_states.squeeze(1))  # (B 2D)
 
-        # dt scaling per approx of Haochen's fn
-        if self.scale_factor > 1:
-            s = zxbcdt.size()
-            zxbcdt = zxbcdt.view(-1, s[-1])
-            x = zxbcdt[:,-self.nheads:] + self.dt_bias
-            a = self.scale_factor
-            sp = torch.nn.functional.softplus
-            dt = sp(x).log()
-            dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
-            dt = x/a - sp(dt)*(1-1/a)
-            dt = dt.view(*s[:-1], -1)
-            zxbcdt[:,-self.nheads:] = dt - self.dt_bias
-            zxbcdt = zxbcdt.view(*s)
+        # # dt scaling per approx of Haochen's fn
+        # if self.scale_factor > 1:
+        #     s = zxbcdt.size()
+        #     zxbcdt = zxbcdt.view(-1, s[-1])
+        #     x = zxbcdt[:,-self.nheads:] + self.dt_bias
+        #     a = self.scale_factor
+        #     sp = torch.nn.functional.softplus
+        #     dt = sp(x).log()
+        #     dt = a*math.log(a)/(a-1) - x/a - (1-1/a)*dt
+        #     dt = x/a - sp(dt)*(1-1/a)
+        #     dt = dt.view(*s[:-1], -1)
+        #     zxbcdt[:,-self.nheads:] = dt - self.dt_bias
+        #     zxbcdt = zxbcdt.view(*s)
         
         d_mlp = (zxbcdt.shape[-1] - 2 * self.d_ssm - 2 * self.ngroups * self.d_state - self.nheads) // 2
         z0, x0, z, xBC, dt = torch.split(
