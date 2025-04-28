@@ -544,7 +544,7 @@ class Mamba2CP(Mamba2):
             y = y * self.act(z.to(torch.float32))
             v = y.pow(2).mean(-1, True)
             y = y * torch.rsqrt(v + 1e-5)
-            y = y.to(inp_dtype) * self.norm.weight
+            y = y.to(inp_dtype) * w  # self.norm.weight
             y = y.view(*s)
 
         d_nonssm = (
