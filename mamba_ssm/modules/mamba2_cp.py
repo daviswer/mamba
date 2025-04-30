@@ -537,13 +537,12 @@ class Mamba2CP(Mamba2):
         if self.rmsnorm:
             # y = self.norm(y, z)
             s = y.shape
-            y = y.view(*s[:-1], self.nheads, self.headdim)
-            w = self.norm.weight.view(self.nheads, self.headdim)
-            z = z.view(*s[:-1], self.nheads, self.headdim)
+            y = y #.view(*s[:-1], self.nheads, self.headdim)
+            w = self.norm.weight #.view(self.nheads, self.headdim)
+            z = z #.view(*s[:-1], self.nheads, self.headdim)
             inp_dtype = y.dtype
             y = y * self.act(z.to(torch.float32))
             v = y.pow(2).mean(-1, True)
-            v = v.add(v.mean(-2, True)).div(2)
             y = y * torch.rsqrt(v + 1e-5)
             y = y.to(inp_dtype) * w  # self.norm.weight
             y = y.view(*s)
