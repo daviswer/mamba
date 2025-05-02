@@ -182,7 +182,7 @@ class Mamba2(nn.Module, PyTorchModelHubMixin):
         # If the model is loaded in fp16, without the .float() here, A might be -inf
         A = -torch.exp(self.A_log.float())  # (nheads) or (d_inner, d_state)
         dt_limit_kwargs = {} if self.dt_limit == (0.0, float("inf")) else dict(dt_limit=self.dt_limit)
-        if self.use_mem_eff_path and inference_params is None:
+        if False and self.use_mem_eff_path and inference_params is None:
             out = mamba_split_conv1d_scan_combined(
                 zxbcdt,
                 rearrange(self.conv1d.weight, "d 1 w -> d w"),
@@ -268,7 +268,18 @@ class Mamba2(nn.Module, PyTorchModelHubMixin):
                     ssm_state.copy_(varlen_states)
             y = rearrange(y, "b l h p -> b l (h p)")
             if self.rmsnorm:
-                y = self.norm(y, z)
+                # y = self.norm(y, z)
+                s = y.shape
+                y = y.view(*s[:-1], self.nheads, self.headdim)
+                w = self.norm.weight.view(self.nheads, self.headdim)
+                z = z.view(*s[:-1], self.nheads, self.headdim)
+                inp_dtype = y.dtype
+                y = y * self.act(z.to(torch.float32))
+                v = y.pow(2).mean(-1, True)
+                y = y * torch.rsqrt(v + 1e-5)
+                y = y.to(inp_dtype) * w  # self.norm.weight
+                y = y.view(*s)
+                z = z.view(*s)
             if d_mlp > 0:
                 y = torch.cat([F.silu(z0) * x0, y], dim=-1)
             if seqlen_og is not None:
