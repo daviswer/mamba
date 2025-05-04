@@ -1,5 +1,6 @@
 from typing import Callable, Literal, Optional
 
+import time
 import torch
 import torch.distributed as dist
 import torch.distributed._functional_collectives as funcol
@@ -547,10 +548,10 @@ class Mamba2CP(Mamba2):
 
         # Apply denom
         y = y.view(*s[:-1], self.nheads, self.headdim)
-        # denom = y[..., -1].abs() + 1e-3
-        # denom = denom / denom.mean(-1, True)
-        # y = y.div(denom.unsqueeze(-1))
-        y = y * y[..., -1:]
+        print(y[0, -1, :, -1])
+        denom = y[..., -1].abs() + 1e-5
+        denom = denom / denom.mean(-1, True)
+        y = y.div(denom.unsqueeze(-1))
         y[..., -1] = 0  # reserve
         y = y.view(*s)
 
