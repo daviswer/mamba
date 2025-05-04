@@ -525,15 +525,15 @@ class Mamba2CP(Mamba2):
 
         xBC = conv_cp(xBC, self, self.cp_mesh, seq_idx)
 
-        # # Set denom channel
-        # x = xBC[..., :self.d_ssm]
-        # BC = xBC[..., self.d_ssm:]
-        # s = x.shape
-        # x = x.view(*s[:-1], self.nheads, self.headdim)
+        # Set denom channel
+        x = xBC[..., :self.d_ssm]
+        BC = xBC[..., self.d_ssm:]
+        s = x.shape
+        x = x.view(*s[:-1], self.nheads, self.headdim)
         # reserve = x[..., -1]
-        # x[..., -1] = 0
-        # x = x.view(*s)
-        # xBC = torch.cat([x,BC], dim=-1)
+        x[..., -1] = 1
+        x = x.view(*s)
+        xBC = torch.cat([x,BC], dim=-1)
         
         y = scan(
             self.cp_impl_fn,
@@ -545,12 +545,12 @@ class Mamba2CP(Mamba2):
             cp_mesh=self.cp_mesh,
         )
 
-        # # Apply denom
-        # y = y.view(*s[:-1], self.nheads, self.headdim)
-        # denom = y[..., -1].abs() + 1e-5
-        # y = y.div(denom.unsqueeze(-1))
-        # y[..., -1] = reserve
-        # y = y.view(*s)
+        # Apply denom
+        y = y.view(*s[:-1], self.nheads, self.headdim)
+        denom = y[..., -1].abs() + 1e-5
+        y = y.div(denom.unsqueeze(-1))
+        y[..., -1] = 0  # reserve
+        y = y.view(*s)
 
         if self.rmsnorm:
             y = self.norm(y, z)
