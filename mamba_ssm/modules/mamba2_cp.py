@@ -525,15 +525,15 @@ class Mamba2CP(Mamba2):
 
         xBC = conv_cp(xBC, self, self.cp_mesh, seq_idx)
 
-        # Set denom channel
-        x = xBC[..., :self.d_ssm]
-        BC = xBC[..., self.d_ssm:]
-        s = x.shape
-        x = x.view(*s[:-1], self.nheads, self.headdim)
-        reserve = x[..., -1]
-        x[..., -1] = 0
-        x = x.view(*s)
-        xBC = torch.cat([x,BC], dim=-1)
+        # # Set denom channel
+        # x = xBC[..., :self.d_ssm]
+        # BC = xBC[..., self.d_ssm:]
+        # s = x.shape
+        # x = x.view(*s[:-1], self.nheads, self.headdim)
+        # reserve = x[..., -1]
+        # x[..., -1] = 0
+        # x = x.view(*s)
+        # xBC = torch.cat([x,BC], dim=-1)
         
         y = scan(
             self.cp_impl_fn,
