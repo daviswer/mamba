@@ -545,12 +545,12 @@ class Mamba2CP(Mamba2):
             cp_mesh=self.cp_mesh,
         )
 
-        # # Apply denom
-        # y = y.view(*s[:-1], self.nheads, self.headdim)
+        # Apply denom
+        y = y.view(*s[:-1], self.nheads, self.headdim)
         # denom = y[..., -1].abs() + 1e-5
         # y = y.div(denom.unsqueeze(-1))
-        # y[..., -1] = reserve
-        # y = y.view(*s)
+        y[..., -1] = reserve
+        y = y.view(*s)
 
         if self.rmsnorm:
             y = self.norm(y, z)
