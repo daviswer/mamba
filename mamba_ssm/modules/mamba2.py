@@ -154,7 +154,7 @@ class Mamba2(nn.Module):
         self.xnorm = nn.LayerNorm(self.d_inner, elementwise_affine=False)
         self.Snorm = nn.LayerNorm(self.headdim*self.d_state, elementwise_affine=False)
         self.initial_state = nn.Parameter(torch.empty(1, self.nheads, self.headdim, self.d_state))
-        self.register_buffer(A_log, torch.zeros(self.nheads))
+        self.register_buffer("A_log", torch.zeros(self.nheads))
 
     def forward(self, u, seqlen=None, seq_idx=None, cu_seqlens=None, inference_params=None):
         """
@@ -255,7 +255,7 @@ class Mamba2(nn.Module):
             init = self.Snorm(self.initial_state.view(1,self.nheads,-1)).view(*self.initial_state.size())
             init = init.expand(batch,-1,-1,-1)
 
-            # Correct B scale
+            # Correct B scale, computationally stable (1-sigmoid)/sofplus
             adj = dt + self.dt_bias
             spadj = F.softplus(adj)
             adj = adj - spadj - spadj.log()
