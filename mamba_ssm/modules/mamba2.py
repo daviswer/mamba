@@ -129,10 +129,10 @@ class Mamba2(nn.Module):
         self.dt_bias._no_weight_decay = True
 
         assert A_init_range[0] > 0 and A_init_range[1] >= A_init_range[0]
-        A = torch.empty(self.nheads, dtype=torch.float32, device=device).uniform_(*A_init_range)
-        A_log = torch.log(A).to(dtype=dtype)
-        self.A_log = nn.Parameter(A_log)
-        self.A_log._no_weight_decay = True
+        # A = torch.empty(self.nheads, dtype=torch.float32, device=device).uniform_(*A_init_range)
+        # A_log = torch.log(A).to(dtype=dtype)
+        # self.A_log = nn.Parameter(A_log)
+        # self.A_log._no_weight_decay = True
 
         # D "skip" parameter
         self.D = nn.Parameter(torch.ones(self.d_ssm if self.D_has_hdim else self.nheads, device=device))
@@ -149,6 +149,12 @@ class Mamba2(nn.Module):
             self.out_proj = RowParallelLinear(self.d_inner * self.world_size, self.d_model, bias=bias,
                                               process_group=self.process_group, sequence_parallel=self.sequence_parallel,
                                               **factory_kwargs)
+
+        self.bnorm = nn.LayerNorm(self.d_state, elementwise_affine=False)
+        self.xnorm = nn.LayerNorm(self.d_inner, elementwise_affine=False)
+        self.Snorm = nn.LayerNorm(self.headdim*self.d_state, elementwise_affine=False)
+        self.initial_state = nn.Parameter(torch.empty(1, self.nheads, self.headdim, self.d_state))
+        self.register_buffer(A_log, torch.zeros(self.nheads))
 
     def forward(self, u, seqlen=None, seq_idx=None, cu_seqlens=None, inference_params=None):
         """
@@ -180,7 +186,7 @@ class Mamba2(nn.Module):
         # If the model is loaded in fp16, without the .float() here, A might be -inf
         A = -torch.exp(self.A_log.float())  # (nheads) or (d_inner, d_state)
         dt_limit_kwargs = {} if self.dt_limit == (0.0, float("inf")) else dict(dt_limit=self.dt_limit)
-        if self.use_mem_eff_path and inference_params is None:
+        if False:  # self.use_mem_eff_path and inference_params is None:
             out = mamba_split_conv1d_scan_combined(
                 zxbcdt,
                 rearrange(self.conv1d.weight, "d 1 w -> d w"),
@@ -240,6 +246,22 @@ class Mamba2(nn.Module):
                     seq_idx=seq_idx,
                 ).transpose(1, 2)
             x, B, C = torch.split(xBC, [self.d_ssm, self.ngroups * self.d_state, self.ngroups * self.d_state], dim=-1)
+
+            # Norm x and B
+            x = self.xnorm(x)
+            B = self.bnorm(B)
+
+            # Prep init state
+            init = self.Snorm(self.initial_state.view(1,self.nheads,-1)).view(*self.initial_state.size())
+            init = init.expand(batch,-1,-1,-1)
+
+            # Correct B scale
+            adj = dt + self.dt_bias
+            spadj = F.softplus(adj)
+            adj = adj - spadj - spadj.log()
+            adj = adj.exp()
+            B = B * adj
+            
             y = mamba_chunk_scan_combined(
                 rearrange(x, "b l (h p) -> b l h p", p=self.headdim),
                 dt,
@@ -253,6 +275,7 @@ class Mamba2(nn.Module):
                 dt_softplus=True,
                 seq_idx=seq_idx,
                 cu_seqlens=cu_seqlens,
+                initial_states = init,
                 **dt_limit_kwargs,
                 return_final_states=ssm_state is not None,
                 return_varlen_states=cu_seqlens is not None and inference_params is not None,
