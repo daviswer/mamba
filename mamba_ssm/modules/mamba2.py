@@ -154,7 +154,7 @@ class Mamba2(nn.Module):
         self.xnorm = nn.LayerNorm(self.d_inner, elementwise_affine=False)
         self.Snorm = nn.LayerNorm(self.headdim*self.d_state, elementwise_affine=False)
         self.initial_state = nn.Parameter(torch.empty(1, self.nheads, self.headdim, self.d_state))
-        self.register_buffer("A_log", torch.zeros(self.nheads))
+        # self.register_buffer("A_log", torch.zeros(self.nheads))
 
     def forward(self, u, seqlen=None, seq_idx=None, cu_seqlens=None, inference_params=None):
         """
@@ -184,7 +184,7 @@ class Mamba2(nn.Module):
         if seqlen_og is not None:
             zxbcdt = rearrange(zxbcdt, "(b l) d -> b l d", l=seqlen)
         # If the model is loaded in fp16, without the .float() here, A might be -inf
-        A = -torch.exp(self.A_log.float())  # (nheads) or (d_inner, d_state)
+        # A = -torch.exp(self.A_log.float())  # (nheads) or (d_inner, d_state)
         dt_limit_kwargs = {} if self.dt_limit == (0.0, float("inf")) else dict(dt_limit=self.dt_limit)
         if False:  # self.use_mem_eff_path and inference_params is None:
             out = mamba_split_conv1d_scan_combined(
@@ -255,12 +255,11 @@ class Mamba2(nn.Module):
             init = self.Snorm(self.initial_state.view(1,self.nheads,-1)).view(*self.initial_state.size())
             init = init.expand(batch,-1,-1,-1)
 
-            # Correct B scale, computationally stable (1-sigmoid)/sofplus
-            adj = dt + self.dt_bias
-            spadj = F.softplus(adj)
-            adj = adj - spadj - spadj.log()
-            adj = adj.exp()
-            B = B * adj
+            # Correction factor A: 1-sigmoid = exp(sigmoid*A), so A = log(1-sigmoid)/sigmoid = -e^(sp(-x)+ln(sp(x)))
+            dt_type = dt.dtype
+            dt = (dt + self.dt_bias).float()
+            A = F.softplus(dt.neg()).add(F.softplus(dt).log()).exp().neg()
+            dt = dt.sigmoid().to(dtype=dt_type)
             
             y = mamba_chunk_scan_combined(
                 rearrange(x, "b l (h p) -> b l h p", p=self.headdim),
@@ -271,8 +270,8 @@ class Mamba2(nn.Module):
                 chunk_size=self.chunk_size,
                 D=rearrange(self.D, "(h p) -> h p", p=self.headdim) if self.D_has_hdim else self.D,
                 z=rearrange(z, "b l (h p) -> b l h p", p=self.headdim) if not self.rmsnorm else None,
-                dt_bias=self.dt_bias,
-                dt_softplus=True,
+                dt_bias=None,
+                dt_softplus=False,
                 seq_idx=seq_idx,
                 cu_seqlens=cu_seqlens,
                 initial_states = init,
