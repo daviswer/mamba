@@ -154,7 +154,7 @@ class Mamba2(nn.Module):
         self.xnorm = nn.LayerNorm(self.d_inner, elementwise_affine=False)
         self.Snorm = nn.LayerNorm(self.headdim*self.d_state, elementwise_affine=False)
         self.initial_state = nn.Parameter(torch.empty(1, self.nheads, self.headdim, self.d_state))
-        # self.register_buffer("A_log", torch.zeros(self.nheads))
+        self.register_buffer("A", torch.ones(self.nheads).neg())
 
     def forward(self, u, seqlen=None, seq_idx=None, cu_seqlens=None, inference_params=None):
         """
@@ -266,7 +266,7 @@ class Mamba2(nn.Module):
             y = mamba_chunk_scan_combined(
                 x_,
                 dt,
-                A,
+                self.A,
                 rearrange(B, "b l (g n) -> b l g n", g=self.ngroups),
                 rearrange(C, "b l (g n) -> b l g n", g=self.ngroups),
                 chunk_size=self.chunk_size,
