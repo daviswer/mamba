@@ -255,14 +255,16 @@ class Mamba2(nn.Module):
             init = self.Snorm(self.initial_state.view(1,self.nheads,-1)).view(*self.initial_state.size())
             init = init.expand(batch,-1,-1,-1)
 
-            # Correction factor A: 1-sigmoid = exp(sigmoid*A), so A = log(1-sigmoid)/sigmoid = -e^(sp(-x)+ln(sp(x)))
+            # Correction factor x: sigmoid / softplus, but computationally stable (hopefully)
             dt_type = dt.dtype
-            dt = (dt + self.dt_bias).float()
-            A = F.softplus(dt.neg()).add(F.softplus(dt).log()).exp().neg()
-            dt = dt.sigmoid().to(dtype=dt_type)
+            dt = (dt + self.dt_bias)
+            spdt = F.softplus(dt)
+            xfactor = (dt - spdt - spdt.log()).exp()
+            x_ = rearrange(x, "b l (h p) -> b l h p", p=self.headdim)
+            x_ = x_ * xfactor.unsqueeze(-1)
             
             y = mamba_chunk_scan_combined(
-                rearrange(x, "b l (h p) -> b l h p", p=self.headdim),
+                x_,
                 dt,
                 A,
                 rearrange(B, "b l (g n) -> b l g n", g=self.ngroups),
@@ -271,7 +273,7 @@ class Mamba2(nn.Module):
                 D=rearrange(self.D, "(h p) -> h p", p=self.headdim) if self.D_has_hdim else self.D,
                 z=rearrange(z, "b l (h p) -> b l h p", p=self.headdim) if not self.rmsnorm else None,
                 dt_bias=None,
-                dt_softplus=False,
+                dt_softplus=True,
                 seq_idx=seq_idx,
                 cu_seqlens=cu_seqlens,
                 initial_states = init,
