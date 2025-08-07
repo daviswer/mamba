@@ -257,11 +257,12 @@ class Mamba2(nn.Module):
 
             # Correction factor x: sigmoid / softplus, but computationally stable (hopefully)
             dt_type = dt.dtype
-            dt = (dt + self.dt_bias)
+            dt = (dt + self.dt_bias).float()
             spdt = F.softplus(dt)
-            xfactor = (dt - spdt - spdt.log()).exp()
+            xfactor = (dt - spdt - spdt.log()).exp().to(dtype=dt_dtype)
             x_ = rearrange(x, "b l (h p) -> b l h p", p=self.headdim)
             x_ = x_ * xfactor.unsqueeze(-1)
+            dt = dt.to(dtype=dt_dtype)
             
             y = mamba_chunk_scan_combined(
                 x_,
