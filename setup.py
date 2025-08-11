@@ -19,7 +19,6 @@ from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 import torch
 from torch.utils.cpp_extension import (
     BuildExtension,
-    CppExtension,
     CUDAExtension,
     CUDA_HOME,
     HIP_HOME
@@ -189,6 +188,9 @@ if not SKIP_CUDA_BUILD:
         if bare_metal_version >= Version("11.8"):
             cc_flag.append("-gencode")
             cc_flag.append("arch=compute_90,code=sm_90")
+        if bare_metal_version >= Version("12.8"):
+            cc_flag.append("-gencode")
+            cc_flag.append("arch=compute_100,code=sm_100")
 
 
     # HACK: The compiler flag -D_GLIBCXX_USE_CXX11_ABI is set to be the same as
@@ -278,10 +280,10 @@ def get_wheel_url():
         # We're using the CUDA version used to build torch, not the one currently installed
         # _, cuda_version_raw = get_cuda_bare_metal_version(CUDA_HOME)
         torch_cuda_version = parse(torch.version.cuda)
-        # For CUDA 11, we only compile for CUDA 11.8, and for CUDA 12 we only compile for CUDA 12.2
+        # For CUDA 11, we only compile for CUDA 11.8, and for CUDA 12 we only compile for CUDA 12.3
         # to save CI time. Minor versions should be compatible.
-        torch_cuda_version = parse("11.8") if torch_cuda_version.major == 11 else parse("12.2")
-        cuda_version = f"{torch_cuda_version.major}{torch_cuda_version.minor}"
+        torch_cuda_version = parse("11.8") if torch_cuda_version.major == 11 else parse("12.3")
+        cuda_version = f"{torch_cuda_version.major}"
 
     gpu_compute_version = hip_ver if HIP_BUILD else cuda_version
     cuda_or_hip = "hip" if HIP_BUILD else "cu"
@@ -357,7 +359,7 @@ setup(
     url="https://github.com/state-spaces/mamba",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: BSD License",
+        "License :: OSI Approved :: Apache Software License",
         "Operating System :: Unix",
     ],
     ext_modules=ext_modules,
@@ -366,7 +368,7 @@ setup(
     else {
         "bdist_wheel": CachedWheelsCommand,
     },
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     install_requires=[
         "torch",
         "packaging",
