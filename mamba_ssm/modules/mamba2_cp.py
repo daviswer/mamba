@@ -418,8 +418,19 @@ def scan(
         dim=-1,
     )
     A = -torch.exp(mamba2.A_log.float())  # (nheads) or (d_inner, d_state)
+    x = rearrange(x, "b l (h p) -> b l h p", p=mamba2.headdim)
+
+    # APPLY UPI SCALING UNIVERSALLY
+    scalefactor = 1
+    dt = F.softplus(dt + mamba2.dt_bias)
+    forget = dt.mul(A).float().exp()
+    # x target: (forget**(1/scale)-1)/(forget-1)*scale
+    xfactor = scalefactor * forget.pow(1/scalefactor).sub(1) / forget.sub(1).add(1e-6)
+    dt = dt / scalefactor
+    x = x * xfactor.to(dtype=x.dtype).unsqueeze(-1)
+    
     y = chunk_scan_combined_impl(
-        rearrange(x, "b l (h p) -> b l h p", p=mamba2.headdim),
+        x,
         dt,
         A,
         rearrange(B, "b l (g n) -> b l g n", g=mamba2.ngroups),
@@ -431,8 +442,8 @@ def scan(
         z=rearrange(z, "b l (h p) -> b l h p", p=mamba2.headdim)
         if not mamba2.rmsnorm
         else None,
-        dt_bias=mamba2.dt_bias,
-        dt_softplus=True,
+        dt_bias=None,
+        dt_softplus=False,
         seq_idx=seq_idx,
         cu_seqlens=None,
         return_final_states=False,
