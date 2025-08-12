@@ -422,10 +422,10 @@ def scan(
 
     # APPLY UPI SCALING UNIVERSALLY
     scalefactor = 1
-    dt = F.softplus(dt + mamba2.dt_bias)
+    dt = F.softplus(dt + mamba2.dt_bias.to(dtype=dt.dtype))
     forget = dt.mul(A).float().exp()
     # x target: (forget**(1/scale)-1)/(forget-1)*scale
-    xfactor = scalefactor * forget.pow(1/scalefactor).sub(1) / forget.sub(1).add(1e-6)
+    xfactor = scalefactor * (1-forget.pow(1/scalefactor)) / (1-forget).add(1e-6)
     dt = dt / scalefactor
     x = x * xfactor.to(dtype=x.dtype).unsqueeze(-1)
     
