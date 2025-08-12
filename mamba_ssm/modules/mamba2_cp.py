@@ -421,7 +421,7 @@ def scan(
     x = rearrange(x, "b l (h p) -> b l h p", p=mamba2.headdim)
 
     # APPLY UPI SCALING UNIVERSALLY
-    scalefactor = 1
+    scalefactor = 8
     dt = F.softplus(dt + mamba2.dt_bias.to(dtype=dt.dtype))
     forget = dt.mul(A).float().exp()
     # x target: (forget**(1/scale)-1)/(forget-1)*scale
