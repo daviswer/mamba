@@ -422,11 +422,14 @@ def scan(
 
     # APPLY UPI SCALING UNIVERSALLY
     scalefactor = 8
-    dt = F.softplus(dt + mamba2.dt_bias.to(dtype=dt.dtype))
-    forget = dt.mul(A).float().exp()
+    dtsp = F.softplus(dt + mamba2.dt_bias.to(dtype=dt.dtype))
+    forget = dtsp.mul(A).float().exp()
     # x target: (forget**(1/scale)-1)/(forget-1)*scale
-    xfactor = scalefactor * (1-forget.pow(1/scalefactor)) / (1-forget).add(1e-6)
-    dt = dt / scalefactor
+    xfactor = (
+        (scalefactor * (1-forget.pow(1/scalefactor)) / (1-forget).add(1e-6)) * dt.ge(-3)
+        + (1 + A.neg().pow(1.015).mul(dt.mul(.95).exp()).div(2.7) * dt.lt(-3)  # quotient-free approx for dt < -3
+    )
+    dt = dtsp / scalefactor
     x = x * xfactor.to(dtype=x.dtype).unsqueeze(-1)
     
     y = chunk_scan_combined_impl(
