@@ -427,7 +427,7 @@ def scan(
     # x target: (forget**(1/scale)-1)/(forget-1)*scale
     xfactor = (
         (scalefactor * (1-forget.pow(1/scalefactor)) / (1+1e-5-forget)) * dt.ge(-3)
-        + (1 + A.neg().pow(1.015).mul(dt.mul(.95).exp()).div(2.7) * dt.lt(-3)  # quotient-free approx for dt < -3
+        + (1 + A.neg().pow(1.015).mul(dt.mul(.95).exp()).div(2.7)) * dt.lt(-3)  # quotient-free approx for dt < -3
     )
     dt = dtsp / scalefactor
     x = x * xfactor.to(dtype=x.dtype).unsqueeze(-1)
